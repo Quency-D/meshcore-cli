@@ -35,7 +35,7 @@ import re
 from meshcore import MeshCore, EventType, logger
 
 # Version
-VERSION = "v1.5.0"
+VERSION = "v1.5.3"
 
 # default ble address is stored in a config file
 MCCLI_CONFIG_DIR = str(Path.home()) + "/.config/meshcore/"
@@ -237,19 +237,24 @@ async def handle_log_rx(event):
     if payload_type == 0x05: # flood msg / channel
         if handle_log_rx.channel_echoes:
 
-            chan_name = ""
-            if "message" in event.payload :
+            if "chan_name" in event.payload:
                 chan_name = event.payload["chan_name"]
+            else:
+                chan_name = ""
+
+            if "message" in event.payload :
                 message = event.payload["message"]
-            elif handle_log_rx.echo_unk_chans:
-                chan_name = event.payload["chan_hash"]
-                message = event.payload["crypted"]
+            elif handle_log_rx.echo_unk_chans or chan_name != "":
+                if chan_name == "":
+                    chan_name = event.payload["chan_hash"]
+                if "crypted" in event.payload:
+                    message = event.payload["crypted"]
 
             if chan_name != "" :
                 width = os.get_terminal_size().columns
                 cars = width - 13 - len(event.payload["path"]) - len(chan_name) - 1
                 dispmsg = message.replace("\n","")[0:cars]
-                txt = f"{ANSI_LIGHT_GRAY}{chan_name} {ANSI_DGREEN}{dispmsg+(cars-len(dispmsg))*' '} {ANSI_YELLOW}[{event.payload['path']}]{ANSI_LIGHT_GRAY}{event.payload['snr']:6,.2f}{event.payload['rssi']:4}{ANSI_END}"
+                txt = f"{ANSI_LIGHT_GRAY}{chan_name} {ANSI_DGREEN}{dispmsg+(cars-len(dispmsg))*' '} {ANSI_START}{width-11-len(event.payload["path"])}G{ANSI_YELLOW}[{event.payload['path']}]{ANSI_LIGHT_GRAY}{event.payload['snr']:6,.2f}{event.payload['rssi']:4}{ANSI_END}"
 
                 if handle_message.above:
                     print_above(txt)
