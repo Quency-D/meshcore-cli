@@ -551,6 +551,7 @@ def make_completion_dict(contacts, pending={}, to=None, channels=None):
             "name" : None,
             "pin" : None,
             "radio" : {",,,":None, "f,bw,sf,cr":None},
+            "radio.fem.rxgain" : {"on":None, "off":None},
             "tx" : None,
             "tuning" : {",", "af,tx_d"},
             "lat" : None,
@@ -586,6 +587,7 @@ def make_completion_dict(contacts, pending={}, to=None, channels=None):
             "bat":None,
             "fstats": None,
             "radio":None,
+            "radio.fem.rxgain":None,
             "tx":None,
             "coords":None,
             "lat":None,
@@ -2092,6 +2094,27 @@ async def next_cmd(mc, cmds, json_output=False):
                             print(json.dumps(res.payload, indent=4))
                         else:
                             print("ok")
+                    case "radio.fem.rxgain":
+                        if cmds[2] == "on":
+                            enabled = True
+                        elif cmds[2] == "off":
+                            enabled = False
+                        else:
+                            print("Error: radio.fem.rxgain expects on/off")
+                            enabled = None
+
+                        if enabled is not None:
+                            res = await mc.commands.send(
+                                b"\x2d" + (b"\x01" if enabled else b"\x00"),
+                                [EventType.OK, EventType.ERROR],
+                            )
+                            logger.debug(res)
+                            if res.type == EventType.ERROR:
+                                print(f"Error: {res}")
+                            elif json_output:
+                                print(json.dumps({"radio.fem.rxgain": "on" if enabled else "off"}))
+                            else:
+                                print("ok")
                     case "lat":
                         if "adv_lon" in mc.self_info :
                             lon = mc.self_info['adv_lon']
@@ -2337,6 +2360,31 @@ async def next_cmd(mc, cmds, json_output=False):
                             print(json.dumps(mc.self_info["tx_power"]))
                         else:
                             print(mc.self_info["tx_power"])
+                    case "radio.fem.rxgain":
+                        res = await mc.commands.send(
+                            b"\x2c",
+                            [EventType.OK, EventType.ERROR],
+                        )
+                        logger.debug(res)
+                        if res.type == EventType.ERROR:
+                            if json_output:
+                                print(json.dumps(res.payload))
+                            else:
+                                print(f"Error: {res}")
+                        else:
+                            if "value" in res.payload:
+                                lna_value = "on" if int(res.payload["value"]) != 0 else "off"
+                            else:
+                                if json_output:
+                                    print(json.dumps({"error": "Missing value", "var": "radio.fem.rxgain"}))
+                                else:
+                                    print("Missing value for radio.fem.rxgain")
+                                lna_value = None
+                            if lna_value is not None:
+                                if json_output:
+                                    print(json.dumps({"radio.fem.rxgain": lna_value}))
+                                else:
+                                    print(lna_value)
                     case "coords":
                         await mc.commands.send_appstart()
                         if json_output :
@@ -3784,6 +3832,7 @@ def get_help_for (cmdname, context="line") :
     lon                : longitude
     radio              : radio parameters
     tx                 : tx power
+    radio.fem.rxgain   : LoRa FEM RX gain control
     private_key        : private key of the node
     print_snr          : snr display in messages
     print_adverts      : display adverts as they come
@@ -3806,6 +3855,7 @@ def get_help_for (cmdname, context="line") :
     radio <freq,bw,sf,cr>       : radio params
     tuning <rx_dly,af>          : tuning params
     tx <dbm>                    : tx power
+    radio.fem.rxgain <on/off>   : LoRa FEM RX gain control
     name <name>                 : node name
     lat <lat>                   : latitude
     lon <lon>                   : longitude
@@ -4012,6 +4062,7 @@ REPEATER_COMMANDS = {
     "log": {"start": None, "stop": None, "erase": None},
     "get": {
         "name": None, "radio": None, "tx": None, "freq": None,
+        "radio.fem.rxgain": None,
         "public.key": None, "prv.key": None, "repeat": None, "role": None,
         "lat": None, "lon": None, "af": None,
         "rxdelay": None, "txdelay": None, "direct.txdelay": None,
@@ -4027,6 +4078,7 @@ REPEATER_COMMANDS = {
     },
     "set": {
         "name": None, "radio": None, "tx": None, "freq": None,
+        "radio.fem.rxgain": {"on": None, "off": None},
         "prv.key": None, "repeat": {"on": None, "off": None},
         "lat": None, "lon": None, "af": None,
         "rxdelay": None, "txdelay": None, "direct.txdelay": None,
@@ -4081,6 +4133,7 @@ REPEATER_HELP = f"""
   get name            - Node name
   get radio           - Radio params (freq,bw,sf,cr)
   get tx              - TX power (dBm)
+  get radio.fem.rxgain - LoRa FEM RX gain on/off
   get repeat          - Repeat mode on/off
   get public.key      - Node public key
   get advert.interval - Advertisement interval (minutes)
@@ -4088,6 +4141,7 @@ REPEATER_HELP = f"""
 
   set name <name>     - Set node name
   set tx <power>      - Set TX power (dBm)
+  set radio.fem.rxgain on|off - Set LoRa FEM RX gain
   set repeat on|off   - Enable/disable repeating
   set radio f,bw,sf,cr - Set radio params (reboot to apply)
   set advert.interval <min> - Set advert interval (60-240 min)
